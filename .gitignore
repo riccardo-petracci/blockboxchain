@@ -1,0 +1,50 @@
+# Cartelle di build e dipendenze
+/target/
+/bin/
+/build/
+/out/
+
+# File di configurazione dell'IDE
+/.idea/
+/.settings/
+/*.iml
+/.vscode/
+/*.swp
+
+# File di log e temporanei
+/logs/
+/*.log
+*.tmp
+*.cache
+*.pid
+*.seed
+
+# File di sistema
+.DS_Store
+Thumbs.db
+
+# File sensibili
+.env
+
+# File Java
+*.class
+*.jar
+*.war
+*.ear
+*.javadoc
+
+# Dipendenze Maven/Gradle
+/.mvn/
+/pom.xml.tag
+/pom.xml.releaseBackup
+/pom.xml.versionsBackup
+/.gradle/
+/*.war
+/*.jar
+/*.ear
+/*.class
+/application.properties
+/application.yml
+
+# File generati da test
+/test-output/
