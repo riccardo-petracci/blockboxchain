@@ -17,10 +17,6 @@ public class Main {
     public static void main(String[] args) {
 
         try {
-//            SwingUtilities.invokeLater(SwingMain::createAndShowGUI);
-
-            //HANDLER SERVER
-            new Thread(() -> {
                 port(Config.getInt("SERVER_PORT"));
 
                 // Save data with POST
@@ -139,7 +135,6 @@ public class Main {
                 });
 
                 System.out.println("Server avviato sulla porta " + Config.getEnvVariable("SERVER_PORT") +"...");
-            }).start(); // Avvia il thread separato
 
         } catch (Exception e) {
             e.printStackTrace();
