@@ -17,7 +17,18 @@ public class Main {
 
     public static void main(String[] args) {
 
+        /*
+        TODO: in teoria prima di avviare il server bisogna eseguire il deploy per pubblicare lo SC
+        in modo da salvare l'indirzzo del contratto sul DB.
+        Precisamente bisognerebbe vedere se è presente l'indirizzo dello SC nel DB e in caso negativo
+        eseguire il deploy e salvare l'indirizzo. Successivamente è possibile eseguire il server.
+        In questo modo si evita di farlo manualmente e semplicemente avviando la classe main si ha
+        tutto funzionante.
+        */
+
         try {
+            MongoDBConnection.checkInitialization();
+
             port(Config.getInt("SERVER_PORT"));
 
             // Save data with POST
@@ -37,7 +48,7 @@ public class Main {
                     return createResponse("error", "Bad Request", success);
                 }
                 res.status(200);
-                return createResponse("success", "OK", success);
+                return createResponse("success", "Data saved in DB and blockchain", success);
             });
 
             // Validation from ID

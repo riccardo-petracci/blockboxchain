@@ -5,6 +5,7 @@ import org.bson.json.JsonMode;
 import org.bson.json.JsonParseException;
 import org.bson.types.ObjectId;
 import com.mongodb.MongoWriteException;
+import static com.mongodb.client.model.Filters.*;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -26,8 +27,59 @@ public class MongoDBConnection {
     private final static String COLLECTION_CREDENTIAL = Config.getEnvVariable("COLLECTION_CREDENTIAL");
     private final static String COLLECTION_ENTRIES = Config.getEnvVariable("COLLECTION_ENTRIES");
     private final static String COLLECTION_BLOCKS = Config.getEnvVariable("COLLECTION_BLOCKS");
+    private final static String GASPRICE = Config.getEnvVariable("GASPRICE");
+    private final static String GASLIMIT = Config.getEnvVariable("GASLIMIT");
 
-    // Metodo per ottenere la collezione MongoDB
+    public static void checkInitialization() {
+
+        //1) check if collection are created
+        try (MongoClient mongoClient = MongoClients.create(URI)) {
+            MongoDatabase database = mongoClient.getDatabase(DATABASE);
+
+            // Step 1: Ensure collections exist
+            ensureCollectionExists(database, COLLECTION_CREDENTIAL);
+            ensureCollectionExists(database, COLLECTION_ENTRIES);
+            ensureCollectionExists(database, COLLECTION_BLOCKS);
+
+            // Step 2: Check if smart contract is already deployed
+            MongoCollection<Document> contractCollection = database.getCollection(COLLECTION_CREDENTIAL);
+            Document contractDoc = contractCollection.find().first();
+
+            if (contractDoc == null) {
+                System.out.println("Smart contract not deployed. Deploying now...");
+
+                // Step 3: Deploy the contract (placeholder function)
+                String deployedAddress = SmartContractHash.main();
+
+                // Step 4: Save address in MongoDB
+                contractDoc = new Document("address", SmartContractHash.getEndPoint())
+                        .append("credentials", SmartContractHash.getPrivateKey())
+                        .append("contract", deployedAddress)
+                        .append("gaslimit", GASLIMIT)
+                        .append("gasprice", GASPRICE);
+                contractCollection.insertOne(contractDoc);
+
+                System.out.println("Smart contract deployed and saved at address: " + deployedAddress);
+            } else {
+                System.out.println("Smart contract already deployed at: " + contractDoc.getString("contract"));
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void ensureCollectionExists(MongoDatabase db, String name) {
+        boolean exists = db.listCollectionNames()
+                .into(new java.util.ArrayList<>())
+                .contains(name);
+        if (!exists) {
+            db.createCollection(name);
+            System.out.println("Created collection: " + name);
+        }
+    }
+
+    // Obtain MongoDB collection
     private static MongoCollection<Document> getCollection(String _collection) {
         MongoClient mongoClient = MongoClients.create(URI);
         MongoDatabase database = mongoClient.getDatabase(DATABASE);
@@ -82,7 +134,6 @@ public class MongoDBConnection {
 	        	System.err.println("Error: An unexpected error occurred.");
 	            e.printStackTrace();
 	        }
-
 	        return result;
 	}
 
@@ -233,7 +284,8 @@ public class MongoDBConnection {
 
             //3. update DB with block number
             updateDBwithBlockNum(entryID, blocknum);
-            response = "blockchain block number saved in database";
+            //response = "blockchain block number saved in database";
+            response = entryID;
             return response;
         } catch (Exception e) {
             response = "error: " + e.getMessage();
@@ -430,45 +482,6 @@ public class MongoDBConnection {
 
         } catch (Exception e) {
             return new JSONObject().put("error", "invalid request: " + e.getMessage()).toString();
-        }
-    }
-
-    // JavaSwing Methods
-    public static List<String> getStandardEntries()
-    {
-        MongoCollection<Document> collection = getCollection(COLLECTION_ENTRIES);
-        List<String> entries = new ArrayList<>();
-        FindIterable<Document> uglyEntries = collection.find();
-
-        for (Document doc : uglyEntries) {
-            entries.add(MongoDBConnection.prettyPrintJson(doc.toJson()));
-        }
-        return entries;
-    }
-
-
-    public static String jsonPanelId(String json) {
-        try {
-            // Create ObjectMapper instance
-            ObjectMapper objectMapper = new ObjectMapper();
-
-            // Parse JSON into a tree structure
-            JsonNode jsonNode = objectMapper.readTree(json);
-
-            // Extract the field
-            String serial = jsonNode.has("num_seriale") ? jsonNode.get("num_seriale").asText() : null;
-            String timestamp = jsonNode.has("timestamp") ? jsonNode.get("timestamp").asText() : null;
-
-            if(serial != null && timestamp != null)
-                serial = serial + " - " + timestamp;
-            else if(serial == null && timestamp != null)
-                serial = timestamp;
-
-            return serial;
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
         }
     }
 }

@@ -18,6 +18,7 @@
 *.cache
 *.pid
 *.seed
+Start.txt
 
 # File di sistema
 .DS_Store

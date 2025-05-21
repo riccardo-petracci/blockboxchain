@@ -31,11 +31,18 @@ public class SmartContractHash
 		private HStorage HSC = null;
 	    
 		
-		public static void main(String[] args) {
-			SmartContractHash SCH = new SmartContractHash(ENDPOINT, PRIVATE_KEY, GAS_LIMIT, GAS_PRICE );
-			String receipt = SCH.deployContract();
-			System.out.println("Deploy contract successfull, receipt:\n" + receipt);
-		}
+//		public static void main(String[] args) {
+//			SmartContractHash SCH = new SmartContractHash(ENDPOINT, PRIVATE_KEY, GAS_LIMIT, GAS_PRICE );
+//			String receipt = SCH.deployContract();
+//			System.out.println("Deploy contract successfull, receipt:\n" + receipt);
+//		}
+
+	public static String main() {
+		SmartContractHash SCH = new SmartContractHash(ENDPOINT, PRIVATE_KEY, GAS_LIMIT, GAS_PRICE );
+		String receipt = SCH.deployContract();
+		System.out.println("Deploy contract successfull, receipt:\n" + receipt);
+		return receipt;
+	}
 		/**
 		 * Costruttore per un contratto già deployato
 		 *
@@ -81,8 +88,15 @@ public class SmartContractHash
 			txManager = new RawTransactionManager(web3jobj, ethCREDENTIALS);
 			contractGasProvider = new StaticGasProvider(gasprice, gaslimit);
 		}
-		
-		/**
+
+	public static String getEndPoint() {
+			return ENDPOINT;
+	}
+	public static String getPrivateKey() {
+			return PRIVATE_KEY;
+	}
+
+	/**
 		 * Esegue una call allo smart contract e salva l'hash passato come parametro
 		 *  
 		 * @param hash
@@ -245,5 +259,4 @@ public class SmartContractHash
 	            return "Field not found";
 	        }
 	    }
-		
 }
