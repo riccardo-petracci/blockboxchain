@@ -3,7 +3,7 @@
 Part of the Block Box Chain project. Here we have Smart Contract, MongoDB interaction and Spark Server.
 
 ## 📂 Project Structure
-- `/src` →Source code
+- `/src` → Source code
 
 ## 📦 Tech
 - Language: Java - Solidity
@@ -12,7 +12,10 @@ Part of the Block Box Chain project. Here we have Smart Contract, MongoDB intera
 - Hosting: VPS Apache
 
 ## 🔧 Installation and Configuration
-Clone repo and compile .env file
+To use the project:
+- Clone repo
+- Compile .env file
+- Execute main file → `Main.java`
 
 
 
