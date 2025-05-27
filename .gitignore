@@ -13,6 +13,7 @@
 
 # File di log e temporanei
 /logs/
+/uploads
 /*.log
 *.tmp
 *.cache

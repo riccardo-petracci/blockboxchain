@@ -1,6 +1,7 @@
 import com.mongodb.client.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.bson.conversions.Bson;
 import org.bson.json.JsonMode;
 import org.bson.json.JsonParseException;
 import org.bson.types.ObjectId;
@@ -8,9 +9,7 @@ import com.mongodb.MongoWriteException;
 import static com.mongodb.client.model.Filters.*;
 
 import java.math.BigInteger;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -27,8 +26,11 @@ public class MongoDBConnection {
     private final static String COLLECTION_CREDENTIAL = Config.getEnvVariable("COLLECTION_CREDENTIAL");
     private final static String COLLECTION_ENTRIES = Config.getEnvVariable("COLLECTION_ENTRIES");
     private final static String COLLECTION_BLOCKS = Config.getEnvVariable("COLLECTION_BLOCKS");
+    private final static String COLLECTION_BLOB = Config.getEnvVariable("COLLECTION_BLOB");
     private final static String GASPRICE = Config.getEnvVariable("GASPRICE");
     private final static String GASLIMIT = Config.getEnvVariable("GASLIMIT");
+    public final static int STANDARD = 0;
+    public final static int BLOB = 1;
 
     public static void checkInitialization() {
 
@@ -40,6 +42,7 @@ public class MongoDBConnection {
             ensureCollectionExists(database, COLLECTION_CREDENTIAL);
             ensureCollectionExists(database, COLLECTION_ENTRIES);
             ensureCollectionExists(database, COLLECTION_BLOCKS);
+            ensureCollectionExists(database, COLLECTION_BLOB);
 
             // Step 2: Check if smart contract is already deployed
             MongoCollection<Document> contractCollection = database.getCollection(COLLECTION_CREDENTIAL);
@@ -107,15 +110,17 @@ public class MongoDBConnection {
     }
 
 
-	public static boolean storeBlock(String _idref, String _block)
+	public static boolean storeBlock(String _idref, String _block, int _collection)
 	{
 		boolean result = true;
 
 	        try {
                 MongoCollection<Document> collection = getCollection(COLLECTION_BLOCKS);
-
+                String _json = "";
 	            // Define the document as a JSON string
-	            String _json = "{ \"StandardEntry_id\": \"" + _idref + "\", \"block\": " + _block + " }";
+                if (_collection == STANDARD) _json = "{ \"collection_id\": \"stand_" + _idref + "\", \"block\": " + _block + " }";
+                if (_collection == BLOB) _json = "{ \"collection_id\": \"blob_" + _idref + "\", \"block\": " + _block + " }";
+
 	            // Convert JSON String to BSON Document
 	            Document doc = Document.parse(_json);
 
@@ -138,12 +143,19 @@ public class MongoDBConnection {
 	}
 
 
-	public static String storeStandardEntry(String _json)
+	public static String storeStandardEntry(String _json , int _collection)
 	{
         String result = "";
+        MongoCollection<Document> collection = null;
 
         try {
-            MongoCollection<Document> collection = getCollection(COLLECTION_ENTRIES);
+            if (_collection == STANDARD) {
+                collection = getCollection(COLLECTION_ENTRIES);
+            } else if (_collection == BLOB) {
+                collection = getCollection(COLLECTION_BLOB);
+            }
+
+            System.out.println("collection: " + collection);
 
             // Convert JSON String to BSON Document
             Document doc = Document.parse(_json);
@@ -257,7 +269,7 @@ public class MongoDBConnection {
     }
 
 
-    public static String storeIncomingJson(String _json){
+    public static String storeIncomingJson(String _json , int _collection){
         String response = "";
         if (_json.isEmpty()) {
             return "error: JSON empty";
@@ -265,7 +277,7 @@ public class MongoDBConnection {
 
         try {
             //1. Normalize and save
-            String updatedNormalized = normalizeAndStore(_json);
+            String updatedNormalized = normalizeAndStore(_json , _collection);
             if (updatedNormalized.contains("error")) return updatedNormalized;
             if(updatedNormalized == null || updatedNormalized.isEmpty()){
                 response = "error: JSON save failed because null or empty";
@@ -283,7 +295,7 @@ public class MongoDBConnection {
             }
 
             //3. update DB with block number
-            updateDBwithBlockNum(entryID, blocknum);
+            updateDBwithBlockNum(entryID, blocknum , _collection);
             //response = "blockchain block number saved in database";
             response = entryID;
             return response;
@@ -295,13 +307,31 @@ public class MongoDBConnection {
         }
     }
 
+    public static String storeBlob(String _fileName, String _safeName, long _fileSize, String _contentType, long _upTime, byte[] _bytes, int _collection) {
+        String response = "";
+        try {
+            MongoCollection<Document> collection = getCollection(COLLECTION_BLOB);
+            Document doc = new Document("originalName", _fileName)
+                    .append("savedAs", _safeName)
+                    .append("size", _fileSize)
+                    .append("contentType", _contentType)
+                    .append("uploadTime", _upTime)
+                    .append("content", _bytes); // store binary content
 
-    private static String normalizeAndStore(String _json) {
+            response = storeIncomingJson(doc.toJson(), _collection);
+        }catch (Exception e) {
+            response = "Error: " + e.getMessage();
+        }
+        return response;
+    }
+
+
+    private static String normalizeAndStore(String _json , int _collection) {
         try {
             String normalized = MongoDBConnection.normalizeJson(_json);
             System.out.println("JSON Normalizzato:\n" + normalized);
             System.out.println("Salvataggio in corso su database...");
-            String updatedNormalized = MongoDBConnection.storeStandardEntry(normalized);
+            String updatedNormalized = MongoDBConnection.storeStandardEntry(normalized , _collection);
             if (updatedNormalized.contains("error")){ return updatedNormalized; }
             return MongoDBConnection.normalizeJson(updatedNormalized);
         } catch (Exception e) {
@@ -342,9 +372,9 @@ public class MongoDBConnection {
     }
 
 
-    private static void updateDBwithBlockNum(String entryID, String blocknum) {
+    private static void updateDBwithBlockNum(String entryID, String blocknum , int _collection) {
         System.out.println("Aggiornamento database...");
-        MongoDBConnection.storeBlock(entryID, blocknum);
+        MongoDBConnection.storeBlock(entryID, blocknum , _collection);
     }
 
 
@@ -389,6 +419,9 @@ public class MongoDBConnection {
 
     public static String getBlockFromID(String _id) {
         String response = "";
+        MongoCollection<Document> collection = null;
+        int _collection = 0;
+
         if (!_id.isEmpty()) {
             try {
                 HashMap<String, String> settings = MongoDBConnection.getBCcredentials();
@@ -399,7 +432,35 @@ public class MongoDBConnection {
                         new BigInteger(settings.get("gasprice"))
                 );
 
-                MongoCollection<Document> collection = getCollection(COLLECTION_ENTRIES);
+                // find doc with _id and analize if contains stand_ or blob_ to choose right collection
+                MongoCollection<Document> blockCollection = getCollection(COLLECTION_BLOCKS);
+                String pattern = "" + _id + "$";
+                Bson filter = regex("collection_id", pattern);
+                Document blockDoc = blockCollection.find(filter).first();
+                System.out.println(blockDoc.toJson());
+                if (blockDoc != null && blockDoc.containsKey("collection_id")) {
+                    String collectionId = blockDoc.getString("collection_id");
+
+                    if (collectionId != null && !collectionId.isEmpty()) {
+                        String lower = collectionId.toLowerCase();
+                        if (lower.contains("stand")) {
+                            _collection = STANDARD;
+                            System.out.println("collection_id contains 'stand' , collection: " + _collection);
+                        } else if (lower.contains("blob")) {
+                            _collection = BLOB;
+                            System.out.println("collection_id contains 'blob' , collection: " + _collection);
+                        } else {
+                            System.out.println("collection_id contains neither 'stand' nor 'blob'");
+                        }
+                    } else {
+                        System.out.println("collection_id is empty or null");
+                    }
+                } else {
+                    System.out.println("Document not found or missing collection_id");
+                }
+
+                if (_collection == STANDARD) collection = getCollection(COLLECTION_ENTRIES);
+                if (_collection == BLOB) collection = getCollection(COLLECTION_BLOB);
 
                 // Convert String in ObjectID
                 ObjectId objectId = new ObjectId(_id);
@@ -434,11 +495,14 @@ public class MongoDBConnection {
     }
 
 
-    public static String getJsonFromID(String _id){
+    public static String getJsonFromID(String _id, int _collection) {
         JSONArray response = new JSONArray();
+        MongoCollection<Document> collection = null;
+
         if (!_id.isEmpty()) {
             try {
-                MongoCollection<Document> collection = getCollection(COLLECTION_ENTRIES);
+                if (_collection == STANDARD) collection = getCollection(COLLECTION_ENTRIES);
+                if (_collection == BLOB) collection = getCollection(COLLECTION_BLOB);
 
                 // Convert String in ObjectID
                 ObjectId objectId = new ObjectId(_id);
@@ -448,6 +512,8 @@ public class MongoDBConnection {
 
                 if (doc != null) {
                     response.put(new JSONObject(doc.toJson()));
+                } else if (doc == null && _collection == STANDARD) {
+                    return getJsonFromID(_id, BLOB);
                 } else {
                     return "error: document not found";
                 }
