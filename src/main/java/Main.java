@@ -53,6 +53,12 @@ public class Main {
             post("/saveDataBlob", (req, res) -> {
                 req.raw().setAttribute("org.eclipse.jetty.multipartConfig", new MultipartConfigElement("/tmp"));
 
+                String companyName = req.queryParams("companyName");
+                if (companyName == null || companyName.isEmpty()) {
+                    res.status(400);
+                    return createResponse("error", "Bad Request", "missing params: companyName");
+                }
+
                 Collection<Part> parts = req.raw().getParts();
                 List<String> success = new ArrayList<>();
 
@@ -80,6 +86,7 @@ public class Main {
 
                         try {
                             String result = MongoDBConnection.storeBlob(
+                                    companyName,
                                     fileName,
                                     safeName,
                                     fileSize,
