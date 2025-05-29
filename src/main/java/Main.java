@@ -8,6 +8,9 @@ import javax.servlet.http.Part;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
 public class Main {
@@ -49,58 +52,58 @@ public class Main {
             //Save Blob with POST
             post("/saveDataBlob", (req, res) -> {
                 req.raw().setAttribute("org.eclipse.jetty.multipartConfig", new MultipartConfigElement("/tmp"));
-                Part filePart = req.raw().getPart("file");
-                // ========== SECURITY CHECKS ==========
-                String fileName = filePart.getSubmittedFileName();
-                long fileSize = filePart.getSize();
 
-                // 1. Check type
-                if (!fileName.endsWith(".pdf") && !fileName.endsWith(".json")) {
-                    res.status(400);
-                    return createResponse("error", "Unsupported file type", fileName);
-                }
+                Collection<Part> parts = req.raw().getParts();
+                List<String> success = new ArrayList<>();
 
-                // 2. Check size (e.g., max 5MB)
-                if (fileSize > 5 * 1024 * 1024) {
-                    res.status(413);
-                    return createResponse("error", "File too large (max 5MB)", null);
-                }
+                for (Part filePart : parts) {
+                    if (filePart.getName().equals("file")) {
+                        String fileName = filePart.getSubmittedFileName();
+                        long fileSize = filePart.getSize();
 
-                // 3. Rename file safely
-                String safeName = UUID.randomUUID() + "_" + fileName;
-                File uploadsDir = new File("uploads");
-                if (!uploadsDir.exists()) uploadsDir.mkdir();
-                File savedFile = new File(uploadsDir, safeName);
+                        // ========== SECURITY CHECKS ==========
+                        // 1. Check size (e.g., max 5MB)
+                        if (fileSize > 5 * 1024 * 1024) {
+                            res.status(413);
+                            return createResponse("error", "File too large (max 5MB)", null);
+                        }
 
-                // Save file to disk
-                InputStream input = filePart.getInputStream();
-                Files.copy(input, savedFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                String success;
+                        // 3. Rename file safely
+                        String safeName = UUID.randomUUID() + "_" + fileName;
+                        File uploadsDir = new File("uploads");
+                        if (!uploadsDir.exists()) uploadsDir.mkdir();
+                        File savedFile = new File(uploadsDir, safeName);
 
-                try {
-                    success = MongoDBConnection.storeBlob(
-                            fileName,
-                            safeName,
-                            fileSize,
-                            filePart.getContentType(),
-                            System.currentTimeMillis(),
-                            Files.readAllBytes(savedFile.toPath()),
-                            MongoDBConnection.BLOB
-                    );
-                } catch (Exception e) {
-                    res.status(500);
-                    return createResponse("error", "Failed to store blob in MongoDB", e.getMessage());
-                }finally {
-                    // Always delete the file, even on failure
-                    try {
-                        Files.deleteIfExists(savedFile.toPath());
-                        System.out.println("Deleted temporary file: " + savedFile.getPath());
-                    } catch (IOException e) {
-                        System.err.println("Failed to delete temp file: " + e.getMessage());
+                        // Save file to disk
+                        InputStream input = filePart.getInputStream();
+                        Files.copy(input, savedFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+
+                        try {
+                            String result = MongoDBConnection.storeBlob(
+                                    fileName,
+                                    safeName,
+                                    fileSize,
+                                    filePart.getContentType(),
+                                    System.currentTimeMillis(),
+                                    Files.readAllBytes(savedFile.toPath()),
+                                    MongoDBConnection.BLOB
+                            );
+                            success.add(createResponse("success", "File Saved", result));
+                        } catch (Exception e) {
+                            success.add(createResponse("error", "Failed to saved", fileName));
+                        } finally {
+                            // Always delete the file, even on failure
+                            try {
+                                Files.deleteIfExists(savedFile.toPath());
+                                System.out.println("Deleted temporary file: " + savedFile.getPath());
+                            } catch (IOException e) {
+                                System.err.println("Failed to delete temp file: " + e.getMessage());
+                            }
+                        }
                     }
                 }
 
-                return createResponse("success", "Data saved in DB and blockchain", success);
+                return String.join("\n", success);
             });
 
             // Validation from ID
