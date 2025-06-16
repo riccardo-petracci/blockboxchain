@@ -307,19 +307,19 @@ public class MongoDBConnection {
         }
     }
 
-    public static String storeBlob(String _companyName, String _fileName, String _safeName, long _fileSize, String _contentType, long _upTime, byte[] _bytes, int _collection) {
+    public static String storeBlob(String _companyName, String _fileName, long _fileSize, String _contentType, long _upTime, byte[] _bytes, int _collection) {
         String response = "";
         try {
-            MongoCollection<Document> collection = getCollection(COLLECTION_BLOB);
+//            MongoCollection<Document> collection = getCollection(COLLECTION_BLOB);
             Document doc = new Document("companyName", _companyName.toUpperCase())
-                    .append("originalName", _fileName)
-                    .append("savedAs", _safeName)
+                    .append("name", _fileName)
                     .append("size", _fileSize)
                     .append("contentType", _contentType)
                     .append("uploadTime", _upTime)
                     .append("content", _bytes); // store binary content
 
             response = storeIncomingJson(doc.toJson(), _collection);
+
         }catch (Exception e) {
             response = "Error: " + e.getMessage();
         }

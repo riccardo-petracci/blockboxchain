@@ -75,10 +75,10 @@ public class Main {
                         }
 
                         // 3. Rename file safely
-                        String safeName = UUID.randomUUID() + "_" + fileName;
+                        fileName = UUID.randomUUID() + "_" + fileName;
                         File uploadsDir = new File("uploads");
                         if (!uploadsDir.exists()) uploadsDir.mkdir();
-                        File savedFile = new File(uploadsDir, safeName);
+                        File savedFile = new File(uploadsDir, fileName);
 
                         // Save file to disk
                         InputStream input = filePart.getInputStream();
@@ -88,14 +88,18 @@ public class Main {
                             String result = MongoDBConnection.storeBlob(
                                     companyName,
                                     fileName,
-                                    safeName,
                                     fileSize,
                                     filePart.getContentType(),
                                     System.currentTimeMillis(),
                                     Files.readAllBytes(savedFile.toPath()),
                                     MongoDBConnection.BLOB
                             );
-                            success.add(createResponse("success", "File Saved", result));
+                            JSONArray fullResult = new JSONArray();
+                            fullResult.put(fileName);
+                            fullResult.put(result);
+
+                            success.add(createResponse("success", "File Saved", fullResult));
+
                         } catch (Exception e) {
                             success.add(createResponse("error", "Failed to saved", fileName));
                         } finally {
