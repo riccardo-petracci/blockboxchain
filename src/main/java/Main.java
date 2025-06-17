@@ -15,7 +15,7 @@ import java.util.UUID;
 
 public class Main {
 
-    public static String createResponse(String status, String message, Object data) {
+    private static String createResponse(String status, String message, Object data) {
         JSONObject response = new JSONObject();
         response.put("status", status);
         response.put("message", message);
@@ -212,8 +212,31 @@ public class Main {
                 return result;
             });
 
-            System.out.println("Server avviato sulla porta " + Config.getEnvVariable("SERVER_PORT") + "...");
+            /* **********************************
+                    REMOVE BEFORE PRODUCTION
+                **********************************/
 
+            get("/deleteLuce", (req, res) -> {
+                res.type("application/json");
+
+                long deletedEntries = 0;
+                String code = req.queryParams("code");
+                if (code == null || code.isEmpty()) {
+                    res.status(400);
+                    return createResponse("error", "Bad request, code empty or wrong", null);
+                }
+
+                if(code.equals("luce")){
+                    deletedEntries = MongoDBConnection.deleteLuce();
+                    if(deletedEntries == 0){
+                        return createResponse("error", "No documents deleted", null);
+                    }
+                }
+                return createResponse("success", "Documents deleted", deletedEntries);
+            });
+
+
+            System.out.println("Server avviato sulla porta " + Config.getEnvVariable("SERVER_PORT") + "...");
         } catch (Exception e) {
             e.printStackTrace();
         }

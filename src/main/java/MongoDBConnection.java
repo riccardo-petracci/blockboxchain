@@ -1,6 +1,8 @@
 import com.mongodb.client.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.result.DeleteResult;
 import org.bson.conversions.Bson;
 import org.bson.json.JsonMode;
 import org.bson.json.JsonParseException;
@@ -10,6 +12,7 @@ import static com.mongodb.client.model.Filters.*;
 
 import java.math.BigInteger;
 import java.util.HashMap;
+import java.util.Map;
 
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -550,5 +553,53 @@ public class MongoDBConnection {
         } catch (Exception e) {
             return new JSONObject().put("error", "invalid request: " + e.getMessage()).toString();
         }
+    }
+
+    /* **********************************
+            REMOVE BEFORE PRODUCTION
+       **********************************/
+    public static long deleteLuce(){
+        try {
+            long counter = 0;
+            MongoCollection<Document> collection = getCollection(COLLECTION_ENTRIES);
+            FindIterable<Document> entriesDocs = collection.find();
+            for (Document doc : entriesDocs) {
+                if (containsNameField(doc, "name","LU.CE.")) {
+                    collection.deleteOne(Filters.eq("_id", doc.getObjectId("_id")));
+                    counter++;
+                }
+            }
+            collection = getCollection(COLLECTION_BLOB);
+            FindIterable<Document> blobDocs = collection.find();
+            for (Document doc : blobDocs) {
+                if (containsNameField(doc, "companyName", "LU.CE.")) {
+                    collection.deleteOne(Filters.eq("_id", doc.getObjectId("_id")));
+                    counter++;
+                }
+            }
+
+            return counter;
+        } catch (Exception e) {
+        return 0;
+        }
+    }
+
+    private static boolean containsNameField(Document doc, String _field, String _targetValue) {
+        for (Map.Entry<String, Object> entry : doc.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+
+            if (_field.equalsIgnoreCase(key) && value instanceof String) {
+                String nameValue = ((String) value).toLowerCase();
+                if (nameValue.contains(_targetValue.toLowerCase())) {
+                    return true;
+                }
+            } else if (value instanceof Document) {
+                if (containsNameField((Document) value, _field, _targetValue)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
