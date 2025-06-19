@@ -1,17 +1,15 @@
+import org.bson.types.Binary;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import static spark.Spark.*;
 import javax.servlet.MultipartConfigElement;
 import javax.servlet.http.Part;
-import javax.servlet.MultipartConfigElement;
-import javax.servlet.http.Part;
+import org.bson.Document;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class Main {
 
@@ -29,92 +27,120 @@ public class Main {
 
             port(Config.getInt("SERVER_PORT"));
 
-            // Save data with POST
+            //Save Data blob and json in unique file , handle multipart or json raw in unique end point
             post("/saveData", (req, res) -> {
-                res.type("application/json");
+                String contentType = req.contentType();
 
-                // Receive JSON from request
-                String body = req.body();
-                JSONObject json = new JSONObject(body);
-                String jsonString = json.toString();
-                System.out.println("JSON ricevuto: " + json.toString(4));
+                if (contentType != null && contentType.contains("application/json")) {
+                    // Embedded device (Arduino/ESP32) raw JSON
+                    res.type("application/json");
 
-                // Save JSON in MongoDB
-                String success = MongoDBConnection.storeIncomingJson(jsonString , MongoDBConnection.STANDARD);
-                if (success.contains("error")) {
-                    res.status(400);
-                    return createResponse("error", "Bad Request", success);
-                }
-                res.status(200);
-                return createResponse("success", "Data saved in DB and blockchain", success);
-            });
+                    // Receive JSON from request
+                    String body = req.body();
+                    Document jsonDoc = Document.parse(body);
+                    System.out.println("JSON ricevuto: " + jsonDoc.toJson());
 
-            //Save Blob with POST
-            post("/saveDataBlob", (req, res) -> {
-                req.raw().setAttribute("org.eclipse.jetty.multipartConfig", new MultipartConfigElement("/tmp"));
+                    String getCompanyID = (String) MongoDBConnection.getJsonKey(jsonDoc, "companyID");
+                    boolean iDfound = MongoDBConnection.checkCompanyID(getCompanyID);
+                    if (!iDfound) {
+                        res.status(400);
+                        return createResponse("error", "Bad Request", "Invalid Company ID");
+                    }
+                    jsonDoc.append("timestamp", System.currentTimeMillis());
 
-                String companyName = req.queryParams("companyName");
-                if (companyName == null || companyName.isEmpty()) {
-                    res.status(400);
-                    return createResponse("error", "Bad Request", "missing params: companyName");
-                }
+                    // Save JSON in MongoDB
+                    String success = MongoDBConnection.storeIncomingJson(jsonDoc.toJson());
+                    if (success.contains("error")) {
+                        res.status(400);
+                        return createResponse("error", "Bad Request", success);
+                    }
+                    res.status(200);
+                    return createResponse("success", "Data Saved", success);
 
-                Collection<Part> parts = req.raw().getParts();
-                List<String> success = new ArrayList<>();
+                } else if (contentType != null && contentType.contains("multipart/form-data")){
 
-                for (Part filePart : parts) {
-                    if (filePart.getName().equals("file")) {
-                        String fileName = filePart.getSubmittedFileName();
-                        long fileSize = filePart.getSize();
+                    // Web/PC client: multipart handle
+                    req.raw().setAttribute("org.eclipse.jetty.multipartConfig", new MultipartConfigElement("/tmp"));
 
-                        // ========== SECURITY CHECKS ==========
-                        // 1. Check size (e.g., max 5MB)
-                        if (fileSize > 5 * 1024 * 1024) {
-                            res.status(413);
-                            return createResponse("error", "File too large (max 5MB)", null);
+//                    String jsonBody = req.queryParams("json");
+                    String jsonBody = req.raw().getParameter("json");
+                    Document mainDoc;
+                    List<String> uploadedFileNames = new ArrayList<>();
+                        try {
+                            mainDoc = Document.parse(jsonBody);
+                        } catch (Exception e) {
+                            res.status(400);
+                            return createResponse("error", "Bad Request", "Invalid JSON body");
                         }
 
-                        // 3. Rename file safely
-                        fileName = UUID.randomUUID() + "_" + fileName;
-                        File uploadsDir = new File("uploads");
-                        if (!uploadsDir.exists()) uploadsDir.mkdir();
-                        File savedFile = new File(uploadsDir, fileName);
+                    String getCompanyID = (String) MongoDBConnection.getJsonKey(mainDoc, "companyID");
+                    boolean iDfound = MongoDBConnection.checkCompanyID(getCompanyID);
+                    if (!iDfound) {
+                        res.status(400);
+                        return createResponse("error", "Bad Request", "Invalid Company ID");
+                    }
 
-                        // Save file to disk
-                        InputStream input = filePart.getInputStream();
-                        Files.copy(input, savedFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-
-                        try {
-                            String result = MongoDBConnection.storeBlob(
-                                    companyName,
-                                    fileName,
-                                    fileSize,
-                                    filePart.getContentType(),
-                                    System.currentTimeMillis(),
-                                    Files.readAllBytes(savedFile.toPath()),
-                                    MongoDBConnection.BLOB
-                            );
-                            JSONArray fullResult = new JSONArray();
-                            fullResult.put(fileName);
-                            fullResult.put(result);
-
-                            success.add(createResponse("success", "File Saved", fullResult));
-
-                        } catch (Exception e) {
-                            success.add(createResponse("error", "Failed to saved", fileName));
-                        } finally {
-                            // Always delete the file, even on failure
-                            try {
-                                Files.deleteIfExists(savedFile.toPath());
-                                System.out.println("Deleted temporary file: " + savedFile.getPath());
-                            } catch (IOException e) {
-                                System.err.println("Failed to delete temp file: " + e.getMessage());
-                            }
+                    String manutenzioneID = req.queryParams("manutenzioneID");
+                    if (manutenzioneID == null || manutenzioneID.isEmpty()) {
+                        manutenzioneID = null;
+                    } else {
+                        iDfound = MongoDBConnection.checkID(manutenzioneID);
+                        if (iDfound == false) {
+                            res.status(400);
+                            return createResponse("error", "Bad Request", "ID not found");
                         }
                     }
-                }
 
-                return String.join("\n", success);
+                    List<Part> fileParts = req.raw().getParts().stream()
+                            .filter(part -> "file".equals(part.getName()))
+                            .collect(Collectors.toList());
+
+                    List<Document> embeddedFiles = new ArrayList<>();
+                    File uploadsDir = new File("uploads");
+                    if (!uploadsDir.exists()) uploadsDir.mkdir();
+
+                    for (Part filePart : fileParts) {
+                        String fileName = UUID.randomUUID() + "_" + filePart.getSubmittedFileName();
+                        long fileSize = filePart.getSize();
+
+                        if (fileSize > 5 * 1024 * 1024) {
+                            res.status(400);
+                            return createResponse("error", "Bad request", "File too large (max 5MB)");
+                        }
+
+                        File savedFile = new File(uploadsDir, fileName);
+
+                        InputStream input = filePart.getInputStream();
+                        Files.copy(input, savedFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                        byte[] contentBytes = Files.readAllBytes(savedFile.toPath());
+
+                        Document embedded = new Document("name", fileName)
+                                .append("size", fileSize)
+                                .append("contentType", filePart.getContentType())
+                                .append("data" , new Binary(contentBytes));
+
+                        embeddedFiles.add(embedded);
+                        uploadedFileNames.add(fileName);
+                        savedFile.delete(); //clean tmp file
+                    }
+
+                    mainDoc.append("timestamp", System.currentTimeMillis());
+                    if (uploadedFileNames.isEmpty()) return createResponse("success", "Data Saved", MongoDBConnection.storeIncomingJson(mainDoc.toJson()));
+
+                    mainDoc.append("files", embeddedFiles);
+                    mainDoc.append("manutenzioneID", manutenzioneID);
+                    String response = MongoDBConnection.storeIncomingJson(mainDoc.toJson());
+
+                    Map<String , Object> responseData = new HashMap<>();
+                    responseData.put("id", response);
+                    responseData.put("uploadedFiles", uploadedFileNames);
+
+                    return createResponse("success", "Data Saved", responseData);
+
+                } else {
+                    res.status(400);
+                    return createResponse("error", "Unsupported Content-Type", "use application/json or multipart/form-data");
+                }
             });
 
             // Validation from ID
@@ -169,7 +195,7 @@ public class Main {
                 }
 
                 // Retrieve data from MongoDB with ID JSON
-                String result = MongoDBConnection.getJsonFromID(id, MongoDBConnection.STANDARD);
+                String result = MongoDBConnection.getJsonFromID(id);
                 if (result.contains("error")) {
                     res.status(404);
                     return createResponse("error", "ID not found", result);
