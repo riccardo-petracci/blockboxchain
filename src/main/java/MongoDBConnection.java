@@ -2,15 +2,17 @@ import com.mongodb.client.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mongodb.client.model.Filters;
+import com.mongodb.client.result.DeleteResult;
 import org.bson.conversions.Bson;
 import org.bson.json.JsonMode;
 import org.bson.json.JsonParseException;
 import org.bson.types.ObjectId;
 import com.mongodb.MongoWriteException;
-import static com.mongodb.client.model.Filters.*;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -18,6 +20,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 
 import org.bson.Document;
 import org.bson.json.JsonWriterSettings;
+import org.everit.json.schema.ValidationException;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -28,9 +31,10 @@ public class MongoDBConnection {
     private final static String COLLECTION_CREDENTIAL = Config.getEnvVariable("COLLECTION_CREDENTIAL");
     private final static String COLLECTION_ENTRIES = Config.getEnvVariable("COLLECTION_ENTRIES");
     private final static String COLLECTION_BLOCKS = Config.getEnvVariable("COLLECTION_BLOCKS");
+    private final static String COLLECTION_SCHEMA = Config.getEnvVariable("COLLECTION_SCHEMA");
     private final static String GASPRICE = Config.getEnvVariable("GASPRICE");
     private final static String GASLIMIT = Config.getEnvVariable("GASLIMIT");
-    private final static String[] COMPANYID = {"LUCE1234", "CAMINI1234", "UNICAM1234"}; //REMOVE BEFORE PRODUCTION
+    private final static String[] COMPANYID = {"LUCESRL", "ITCSRL", "UNICAM", "BMTSRL"}; //REMOVE BEFORE PRODUCTION
 
     public static void checkInitialization() {
 
@@ -42,6 +46,7 @@ public class MongoDBConnection {
             ensureCollectionExists(database, COLLECTION_CREDENTIAL);
             ensureCollectionExists(database, COLLECTION_ENTRIES);
             ensureCollectionExists(database, COLLECTION_BLOCKS);
+            ensureCollectionExists(database, COLLECTION_SCHEMA);
 
             // Step 2: Check if smart contract is already deployed
             MongoCollection<Document> contractCollection = database.getCollection(COLLECTION_CREDENTIAL);
@@ -73,7 +78,7 @@ public class MongoDBConnection {
 
     private static void ensureCollectionExists(MongoDatabase db, String name) {
         boolean exists = db.listCollectionNames()
-                .into(new java.util.ArrayList<>())
+                .into(new ArrayList<>())
                 .contains(name);
         if (!exists) {
             db.createCollection(name);
@@ -95,16 +100,20 @@ public class MongoDBConnection {
 
         // Create JSON array for all entries
         JSONArray jsonArray = new JSONArray();
+        int counter = 0;
 
         // Query to obtain documents
         try (MongoCursor<Document> cursor = collection.find().iterator()) {
             while (cursor.hasNext()) {
+                if (counter >= 50) break;
                 Document doc = cursor.next();
                 // Convert doc BSON in JSONObject and add to array
                 JSONObject jsonObject = new JSONObject(doc.toJson());
                 jsonArray.put(jsonObject);
+                counter++;
             }
         }
+        System.out.println("counter: " + counter);
         return jsonArray.toString();
     }
 
@@ -460,16 +469,63 @@ public class MongoDBConnection {
         return true;
     }
 
+//    public static Object getJsonKey(Document _doc, String _field){
+//        if (_doc == null || _field == null || _field.isEmpty()) return null;
+//        if (!_doc.containsKey(_field)) return null;
+//
+//        return _doc.get(_field);
+//    }
+
+//    using this method you don't need the companyID field at root level. It can be nested.
+    public static Object getJsonKey(Object _doc, String _field) {
+        if (_doc instanceof Document) {
+            Document doc = (Document) _doc;
+            for (Map.Entry<String, Object> entry : doc.entrySet()) {
+                if (entry.getKey().equals(_field)) {
+                    return entry.getValue();
+                }
+                Object result = getJsonKey(entry.getValue(), _field);
+                if (result != null) return result;
+            }
+        } else if (_doc instanceof List) {
+            for (Object item : (List<?>) _doc) {
+                Object result = getJsonKey(item, _field);
+                if (result != null) return result;
+            }
+        }
+        return null;
+    }
+
+
+    public static Document checkSchemaID(String _schemaID) {
+        MongoCollection<Document> collection = getCollection(COLLECTION_SCHEMA);
+        Document query = new Document("schemaID", _schemaID);
+        return collection.find(query).first();
+    }
+
+    public static String documentValidated(Document _schemaDoc, Document _doc) {
+        JSONObject schemaJson;
+
+        if(_schemaDoc.containsKey("schema") && _schemaDoc.get("schema") instanceof Document){
+            Document nested = _schemaDoc.get("schema" , Document.class);
+            schemaJson = new JSONObject(nested.toJson());
+        } else {
+            schemaJson = new JSONObject(_schemaDoc.toJson());
+        }
+
+        JSONObject docJson = new JSONObject(_doc.toJson());
+        SchemaValidator validator = new SchemaValidator(schemaJson);
+        try {
+            validator.validate(docJson);
+            return "success";
+        }catch (ValidationException ve){
+            return "Validation failed: " + String.join("; ", ve.getAllMessages());
+        }
+    }
+
     /* **********************************
             REMOVE BEFORE PRODUCTION
        **********************************/
-    public static Object getJsonKey(Document _doc, String _field){
-        if (_doc == null || _field == null || _field.isEmpty()) return null;
-        if (!_doc.containsKey(_field)) return null;
-
-        return _doc.get(_field);
-    }
-
     public static boolean checkCompanyID(String _id) {
         //in fase di test con sole 3 aziende controllare dentro un array
         for (int i = 0; i < COMPANYID.length; i++) {
@@ -514,5 +570,59 @@ public class MongoDBConnection {
             }
         }
         return false;
+    }
+
+    public static String addSchema(String _schema){
+        String ID = "";
+        try {
+            MongoCollection<Document> collection = getCollection(COLLECTION_SCHEMA);
+            Document doc = Document.parse(_schema);
+            collection.insertOne(doc);
+            String tmpDoc = doc.toJson(JsonWriterSettings.builder().outputMode(JsonMode.RELAXED).build());
+            ID = getMongodbIdJson(tmpDoc);
+        }catch (Exception e){
+            // Catch any other exceptions
+            String result = "error unexpected" + e.getMessage();
+            System.err.println(result);
+            e.printStackTrace();
+            return "error unexpected" + e.getMessage();
+        }
+        return ID;
+    }
+
+    public static String getSchema(){
+        // Obtain collection from DB
+        MongoCollection<Document> collection = getCollection(COLLECTION_SCHEMA);
+
+        // Create JSON array for all entries
+        JSONArray jsonArray = new JSONArray();
+        int counter = 0;
+
+        // Query to obtain documents
+        try (MongoCursor<Document> cursor = collection.find().iterator()) {
+            while (cursor.hasNext()) {
+                if (counter >= 50) break;
+                Document doc = cursor.next();
+                // Convert doc BSON in JSONObject and add to array
+                JSONObject jsonObject = new JSONObject(doc.toJson());
+                jsonArray.put(jsonObject);
+                counter++;
+            }
+        }
+        System.out.println("counter: " + counter);
+        return jsonArray.toString();
+    }
+
+    public static boolean deleteSchema(String _id){
+        try {
+            MongoCollection<Document> collection = getCollection(COLLECTION_SCHEMA);
+            Bson filter = Filters.eq("_id", new ObjectId(_id));
+            DeleteResult result = collection.deleteOne(filter);
+            return result.getDeletedCount() > 0;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+
     }
 }

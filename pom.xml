@@ -59,6 +59,17 @@
           <artifactId>dotenv-java</artifactId>
           <version>2.3.2</version>
       </dependency>
+<!--      dependecy for schema validator-->
+      <dependency>
+          <groupId>org.everit.json</groupId>
+          <artifactId>org.everit.json.schema</artifactId>
+          <version>1.5.1</version>
+      </dependency>
+      <dependency>
+          <groupId>org.json</groupId>
+          <artifactId>json</artifactId>
+          <version>20230227</version>
+      </dependency>
 
 </dependencies>
 
