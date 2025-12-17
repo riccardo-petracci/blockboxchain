@@ -120,13 +120,8 @@ public class Main {
                         return createResponse("error", "Bad Request", "ID not found");
                     }
                 }
-                //Now the mainDoc is completed and available to be checked with schema
-                /* TODO: take schemaID and check inside the collection with schemas if:
-                         - there is the ID;
-                         - if yes -> validate the document with the corrisponding schemaID
-                         - if no  -> error
-                 */
 
+                //Now the mainDoc is completed and available to be checked with schema
                 Document schemaDoc = MongoDBConnection.checkSchemaID(schemaID);
                 if (schemaDoc == null) {
                     res.status(400);
@@ -155,6 +150,61 @@ public class Main {
                 return createResponse("success", "Data Saved", responseData);
             });
 
+
+            get("/getData", (req, res) -> {
+                res.type("application/json");
+
+                String type = req.queryParams("type");
+                boolean mustContainFiles = false;
+                int limit = Integer.parseInt(req.queryParams("limit"));
+                String companyID = req.queryParams("companyID");                //companyID field in db
+                long timeFrom = Long.parseLong(req.queryParams("timeFrom"));    //upload_time field in db
+                long timeTo = Long.parseLong(req.queryParams("timeTo"));        //upload_time field in db
+
+                if (type == null || type.isEmpty()) {
+                    res.status(400);
+                    return createResponse("error", "Bad request, type not inserted", null);
+                }
+                if (type.equalsIgnoreCase("rilevazioni")) {
+                    mustContainFiles = false;
+                }
+                if (type.equalsIgnoreCase("manutenzioni")) {
+                    mustContainFiles = true;
+                }
+                if (!type.equalsIgnoreCase("rilevazioni") && !type.equalsIgnoreCase("manutenzioni")) {
+                    res.status(400);
+                    return createResponse("error", "Bad request, wrong type. Use rilevazioni or manutenzioni", null);
+                }
+
+                if(limit > 500){
+                    res.status(400);
+                    return createResponse("error", "Bad request: limit too big, use limit lower than 500", null);
+                }
+                if (limit <= 0) {
+                    res.status(400);
+                    return createResponse("error", "Bad request: use limit higher than 0", null);
+                }
+
+                boolean companyIDExists = MongoDBConnection.checkCompanyID(companyID);
+                if (companyID == null || companyID.isEmpty()) {
+                    res.status(400);
+                    return createResponse("error", "Bad request, companyID not inserted", null);
+                }
+                if (!companyIDExists) {
+                    res.status(404);
+                    return createResponse("error", "Company not found", null);
+                }
+
+                if (timeFrom > timeTo) {
+                    res.status(400);
+                    return createResponse("error", "Bad request, timeFrom higher than timeTo", null);
+                }
+
+                String entries = MongoDBConnection.getFilteredRecords(companyID,mustContainFiles, timeFrom, timeTo, limit);
+                return createResponse("success", "entries retrieved successfully", new JSONArray(entries));
+            });
+
+
             // Validation from ID
             get("/getValidationID", (req, res) -> {
                 res.type("application/json");
@@ -176,6 +226,7 @@ public class Main {
                 return createResponse("success", "ID found", result);
             });
 
+
             // Validatation from JSON
             get("/getValidationJson", (req, res) -> {
                 res.type("application/json");
@@ -194,6 +245,7 @@ public class Main {
                 res.status(200);
                 return createResponse("success", "ID found", result);
             });
+
 
             // GET Json from ID
             get("/getJsonFromID", (req, res) -> {
@@ -216,10 +268,20 @@ public class Main {
                 return createResponse("success", "ID found", new JSONArray(result));
             });
 
-            // GET all entries
-            get("/getAllEntries", (req, res) -> {
+
+            // GET ALL n last entries without specify data or companyID
+            get("/getAllEntriesTEST", (req, res) -> {
                 res.type("application/json");
-                String entries = MongoDBConnection.allEntries();
+                int limit = Integer.parseInt(req.queryParams("limit"));
+                if(limit > 500){
+                    res.status(400);
+                    return createResponse("error", "Bad request: limit too big, use limit lower than 500", null);
+                }
+                if (limit <= 0) {
+                    res.status(400);
+                    return createResponse("error", "Bad request: use limit higher than 0", null);
+                }
+                String entries = MongoDBConnection.allEntriesTEST(limit);
                 if (entries == null || entries.isEmpty()) {
                     res.status(404);
                     return createResponse("error", "no Entries", null);
@@ -227,6 +289,7 @@ public class Main {
                 res.status(200);
                 return createResponse("success", "entries retrieved successfully", new JSONArray(entries));
             });
+
 
             // GET Json from parameter X
             get("/search", (req, res) -> {
