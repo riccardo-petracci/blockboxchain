@@ -156,26 +156,47 @@ public class Main {
 
                 String type = req.queryParams("type");
                 boolean mustContainFiles = false;
-                int limit = Integer.parseInt(req.queryParams("limit"));
-                String companyID = req.queryParams("companyID");                //companyID field in db
-                long timeFrom = Long.parseLong(req.queryParams("timeFrom"));    //upload_time field in db
-                long timeTo = Long.parseLong(req.queryParams("timeTo"));        //upload_time field in db
+                String limitStr = req.queryParams("limit");
+                String companyID = req.queryParams("companyID");     //companyID field in db
+                String timeFromStr = req.queryParams("timeFrom");    //upload_time field in db
+                String timeToStr = req.queryParams("timeTo");        //upload_time field in db
+                long timeFrom = 0;
+                long timeTo = 0;
+
+                if (timeFromStr != null && !timeFromStr.isEmpty() &&
+                        timeToStr != null && !timeToStr.isEmpty()) {
+                    try {
+                        timeFrom = Long.parseLong(timeFromStr);
+                        timeTo = Long.parseLong(timeToStr);
+
+                        if (timeFrom > timeTo) {
+                            res.status(400);
+                            return createResponse("error", "Bad request: timeFrom cannot be greater than timeTo", null);
+                        }
+                    } catch (NumberFormatException e) {
+                        res.status(400);
+                        return createResponse("error", "Invalid time format: must be numeric", null);
+                    }
+                }
 
                 if (type == null || type.isEmpty()) {
                     res.status(400);
-                    return createResponse("error", "Bad request, type not inserted", null);
-                }
-                if (type.equalsIgnoreCase("rilevazioni")) {
-                    mustContainFiles = false;
-                }
-                if (type.equalsIgnoreCase("manutenzioni")) {
-                    mustContainFiles = true;
+                    return createResponse("error", "Bad request, type null or empty", null);
                 }
                 if (!type.equalsIgnoreCase("rilevazioni") && !type.equalsIgnoreCase("manutenzioni")) {
                     res.status(400);
                     return createResponse("error", "Bad request, wrong type. Use rilevazioni or manutenzioni", null);
                 }
-
+                if (type.equalsIgnoreCase("rilevazioni")) {
+                    mustContainFiles = false;
+                } else if (type.equalsIgnoreCase("manutenzioni")) {
+                    mustContainFiles = true;
+                }
+                if(limitStr == null || limitStr.isEmpty()) {
+                    res.status(400);
+                    return createResponse("error", "Bad request, limit null or empty", null);
+                }
+                int limit = Integer.parseInt(limitStr);
                 if(limit > 500){
                     res.status(400);
                     return createResponse("error", "Bad request: limit too big, use limit lower than 500", null);
@@ -184,7 +205,6 @@ public class Main {
                     res.status(400);
                     return createResponse("error", "Bad request: use limit higher than 0", null);
                 }
-
                 boolean companyIDExists = MongoDBConnection.checkCompanyID(companyID);
                 if (companyID == null || companyID.isEmpty()) {
                     res.status(400);
@@ -194,13 +214,7 @@ public class Main {
                     res.status(404);
                     return createResponse("error", "Company not found", null);
                 }
-
-                if (timeFrom > timeTo) {
-                    res.status(400);
-                    return createResponse("error", "Bad request, timeFrom higher than timeTo", null);
-                }
-
-                String entries = MongoDBConnection.getFilteredRecords(companyID,mustContainFiles, timeFrom, timeTo, limit);
+                String entries = MongoDBConnection.getFilteredRecords(companyID, mustContainFiles, timeFrom, timeTo, limit);
                 return createResponse("success", "entries retrieved successfully", new JSONArray(entries));
             });
 

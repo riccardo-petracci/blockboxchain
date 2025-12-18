@@ -103,7 +103,7 @@ public class MongoDBConnection {
     /*get data filtered by
          - companyID
          - rilevazioni or manutenzioni (record with/out files)
-         - range time (unixtime)
+         - range time (unixtime) - optional
          - limit the number of records returned
      */
     public static String getFilteredRecords(
@@ -118,11 +118,11 @@ public class MongoDBConnection {
 
         List<Bson> pipeline = new ArrayList<>();
 
-    // filter upload_time
-        if (timeFrom != null || timeTo != null) {
+        // filter upload_time
+        if(timeFrom != 0 || timeTo != 0) {
             Document timeFilter = new Document();
-            if (timeFrom != null) timeFilter.append("$gte", timeFrom);
-            if (timeTo != null) timeFilter.append("$lte", timeTo);
+            timeFilter.append("$gte", timeFrom);
+            timeFilter.append("$lte", timeTo);
 
             pipeline.add(new Document("$match",
                     new Document("upload_time", timeFilter)
@@ -130,14 +130,40 @@ public class MongoDBConnection {
         }
 
         //filter files existence
-        if (mustContainFiles != null) {
-            pipeline.add(new Document("$match",
-                    new Document("files",
-                            new Document("$exists", mustContainFiles))
-            ));
-        }
+        pipeline.add(new Document("$match",
+                new Document("files",
+                        new Document("$exists", mustContainFiles))
+        ));
 
-        //filter companyID (ANYWHERE)
+
+        // OPTION A: If you know the exact paths where companyID can appear
+        pipeline.add(new Document("$match",
+                new Document("$or", Arrays.asList(
+                        new Document("companyID", companyID),
+                        new Document("company.companyID", companyID)
+                ))
+        ));
+
+        // OPTION B: If companyID can be in arrays (like in files array)
+        // Use this instead of OPTION A if you have array fields
+        /*
+        pipeline.add(new Document("$match",
+                new Document("$or", Arrays.asList(
+                        new Document("companyID", companyID),
+                        new Document("user.companyID", companyID),
+                        new Document("metadata.companyID", companyID),
+                        new Document("files",
+                                new Document("$elemMatch",
+                                        new Document("companyID", companyID)
+                                )
+                        )
+                ))
+        ));
+        */
+
+        //filter companyID inserted anywhere:
+        //  only if there is no protocol to comapnyID field position use JS function
+        /*
         pipeline.add(new Document("$match",
                 new Document("$expr",
                         new Document("$function",
@@ -160,6 +186,7 @@ public class MongoDBConnection {
                         )
                 )
         ));
+        */
 
         //sort & limit
         pipeline.add(new Document("$sort", new Document("_id", -1)));
