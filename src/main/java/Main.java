@@ -152,7 +152,7 @@ public class Main {
                 }
 
                 mainDoc.append("upload_time", System.currentTimeMillis());
-                mainDoc.append("ref_manutenzioneID", manutenzioneID);
+//                mainDoc.append("ref_manutenzioneID", manutenzioneID);
                 if (uploadedFileNames.isEmpty())
                     return createResponse("success", "Data Saved", MongoDBConnection.storeIncomingJson(mainDoc.toJson()));
 
