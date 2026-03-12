@@ -20,6 +20,7 @@
 *.pid
 *.seed
 Start.txt
+UserExample.txt
 
 # File di sistema
 .DS_Store

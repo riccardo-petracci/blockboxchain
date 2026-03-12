@@ -119,6 +119,22 @@ public class Main {
                         res.status(400);
                         return createResponse("error", "Bad Request", "ID not found");
                     }
+                    String reqToken = (String) mainDoc.get("token");
+                    boolean authorization = false;
+
+                    if (reqToken == null || reqToken.isEmpty())
+                    {
+                        res.status(400);
+                        return createResponse("error", "Bad Request", "Missing token");
+                    }
+
+                    authorization = MongoDBConnection.maintenanceAttachAuth(manutenzioneID, getCompanyID, reqToken);
+
+                    if (!authorization)
+                    {
+                        res.status(400);
+                        return createResponse("error", "Bad Request", "Impossible attach maintenance. Wrong token.");
+                    }
                 }
 
                 //Now the mainDoc is completed and available to be checked with schema
@@ -128,6 +144,7 @@ public class Main {
                     return createResponse("error", "Bad Request", "Schema not found");
                 }
                 //mainDoc.remove("schemaID"); //se lo schemaID va nel JSON Schema togli questa riga
+                mainDoc.remove("token");
                 String docValidated = MongoDBConnection.documentValidated(schemaDoc, mainDoc);
                 if (!docValidated.contains("success")) {
                     res.status(400);

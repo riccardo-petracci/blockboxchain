@@ -30,6 +30,7 @@ public class MongoDBConnection {
     private final static String COLLECTION_ENTRIES = Config.getEnvVariable("COLLECTION_ENTRIES");
     private final static String COLLECTION_BLOCKS = Config.getEnvVariable("COLLECTION_BLOCKS");
     private final static String COLLECTION_SCHEMA = Config.getEnvVariable("COLLECTION_SCHEMA");
+    private final static String COLLECTION_USER = Config.getEnvVariable("COLLECTION_USER");
     private final static String GASPRICE = Config.getEnvVariable("GASPRICE");
     private final static String GASLIMIT = Config.getEnvVariable("GASLIMIT");
     private final static String[] COMPANYID = {"LUCESRL", "ITCSRL", "UNICAM", "BMTSRL"}; //REMOVE BEFORE PRODUCTION
@@ -49,6 +50,7 @@ public class MongoDBConnection {
             ensureCollectionExists(database, COLLECTION_ENTRIES);
             ensureCollectionExists(database, COLLECTION_BLOCKS);
             ensureCollectionExists(database, COLLECTION_SCHEMA);
+            ensureCollectionExists(database, COLLECTION_USER);
 
             // Step 2: Check if smart contract is already deployed
             MongoCollection<Document> contractCollection = database.getCollection(COLLECTION_CREDENTIAL);
@@ -446,6 +448,58 @@ public class MongoDBConnection {
         }catch (ValidationException ve){
             return "Validation failed: " + String.join("; ", ve.getAllMessages());
         }
+    }
+
+    public static boolean maintenanceAttachAuth( String _maintenanceID, String _companyID, String _reqToken)
+    {
+//        find doc corresponding to _maintenanceID
+        MongoCollection<Document> collection = getCollection(COLLECTION_ENTRIES);
+        Document maintenanceDoc = collection.find(
+                Filters.eq("_id", new ObjectId(_maintenanceID))
+        ).first();
+
+        if(maintenanceDoc == null) return false;
+
+//        extract companyID to compare with _companyID
+        String companyIDFromDoc = extractNestedValue(maintenanceDoc, "companyID");
+
+        if(companyIDFromDoc == null) return false;
+
+        if (!companyIDFromDoc.equals(_companyID)) return false;
+
+        collection = getCollection(COLLECTION_USER);
+        Document userDoc = collection.find(
+                Filters.eq("companyID", companyIDFromDoc)
+        ).first();
+
+        if(userDoc == null) return false;
+
+        String tokenFromDoc = userDoc.getString("maintenanceToken");
+
+        if (tokenFromDoc == null) return false;
+
+        return tokenFromDoc.equals(_reqToken);
+    }
+
+
+
+    private static String extractNestedValue(Document doc, String key) {
+        // Check top-level first
+        if (doc.containsKey(key)) {
+            return doc.getString(key);
+        }
+
+        // Search one level deep in nested documents
+        for (Map.Entry<String, Object> entry : doc.entrySet()) {
+            if (entry.getValue() instanceof Document) {
+                Document nestedDoc = (Document) entry.getValue();
+                if (nestedDoc.containsKey(key)) {
+                    return nestedDoc.getString(key);
+                }
+            }
+        }
+
+        return null; // Key not found
     }
 
     /* *********************************
