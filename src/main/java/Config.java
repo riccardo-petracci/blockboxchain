@@ -13,9 +13,9 @@ public class Config {
             try {
                 return Integer.parseInt(value);
             } catch (NumberFormatException e) {
-                throw new RuntimeException("Errore nel parsing del valore numerico per la chiave: " + key);
+                throw new RuntimeException("Numeric parsing error for key: " + key);
             }
         }
-        throw new RuntimeException("Chiave non trovata nel .env: " + key);
+        throw new RuntimeException("Key (" + key + ") not found in .env");
     }
 }

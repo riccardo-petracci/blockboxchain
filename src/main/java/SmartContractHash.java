@@ -11,8 +11,13 @@ import org.web3j.tx.TransactionManager;
 import org.web3j.tx.gas.ContractGasProvider;
 import org.web3j.tx.gas.StaticGasProvider;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class SmartContractHash 
 {
+	private static final Logger logger = LoggerFactory.getLogger(SmartContractHash.class);
+
 	private final static String ENDPOINT = Config.getEnvVariable("BLOCKCHAIN_RPC_URL");
 	private final static String PRIVATE_KEY = Config.getEnvVariable("BLOCKCHAIN_PRIVATE_KEY");
 	private final static BigInteger GAS_LIMIT = BigInteger.valueOf(3000000);
@@ -34,13 +39,13 @@ public class SmartContractHash
 //		public static void main(String[] args) {
 //			SmartContractHash SCH = new SmartContractHash(ENDPOINT, PRIVATE_KEY, GAS_LIMIT, GAS_PRICE );
 //			String receipt = SCH.deployContract();
-//			System.out.println("Deploy contract successfull, receipt:\n" + receipt);
+//			logger.info("Deploy contract successfull, receipt:\n{}" , receipt);
 //		}
 
 	public static String main() {
 		SmartContractHash SCH = new SmartContractHash(ENDPOINT, PRIVATE_KEY, GAS_LIMIT, GAS_PRICE );
 		String receipt = SCH.deployContract();
-		System.out.println("Deploy contract successfull, receipt:\n" + receipt);
+		logger.info("Deploy contract successfull, receipt:\n{}" , receipt);
 		return receipt;
 	}
 		/**
@@ -112,7 +117,7 @@ public class SmartContractHash
 			}
 			catch (Exception e) 
 			{
-				System.out.println("Error storing value");
+				logger.error("Error storing value");
 				e.printStackTrace();
 			}	
 			
@@ -135,7 +140,7 @@ public class SmartContractHash
 			}
 			catch (Exception e) 
 			{
-				System.out.println("Error getting value");
+				logger.error("Error getting value");
 				e.printStackTrace();
 			}
 			
@@ -157,7 +162,7 @@ public class SmartContractHash
 			}
 			catch (Exception e) 
 			{
-				System.out.println("Error deploying contract");
+				logger.error("Error deploying contract");
 				e.printStackTrace();
 			}
 			return contract;
@@ -186,7 +191,7 @@ public class SmartContractHash
 	        }
 	         catch (NoSuchAlgorithmException e) 
 			{
-			    System.out.println("Error generating MD5");
+			    logger.error("Error generating MD5");
 	            throw new RuntimeException(e);
 	        }
 		}

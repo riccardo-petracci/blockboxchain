@@ -21,8 +21,11 @@ import org.bson.json.JsonWriterSettings;
 import org.everit.json.schema.ValidationException;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MongoDBConnection {
+    private static final Logger logger = LoggerFactory.getLogger(MongoDBConnection.class);
 
     private final static String URI = Config.getEnvVariable("MONGO_URI");
     private final static String DATABASE = Config.getEnvVariable("MONGO_DB_NAME");
@@ -57,7 +60,7 @@ public class MongoDBConnection {
             Document contractDoc = contractCollection.find().first();
 
             if (contractDoc == null) {
-                System.out.println("Smart contract not deployed. Deploying now...");
+                logger.debug("Smart contract not deployed. Deploying now...");
 
                 // Step 3: Deploy the contract (placeholder function)
                 String deployedAddress = SmartContractHash.main();
@@ -70,9 +73,9 @@ public class MongoDBConnection {
                         .append("gasprice", GASPRICE);
                 contractCollection.insertOne(contractDoc);
 
-                System.out.println("Smart contract deployed and saved at address: " + deployedAddress);
+                logger.info("Smart contract deployed and saved at address: {}" , deployedAddress);
             } else {
-                System.out.println("Smart contract already deployed at: " + contractDoc.getString("contract"));
+                logger.info("Smart contract already deployed at: {}" , contractDoc.getString("contract"));
             }
 
         } catch (Exception e) {
@@ -86,7 +89,7 @@ public class MongoDBConnection {
                 .contains(name);
         if (!exists) {
             db.createCollection(name);
-            System.out.println("Created collection: " + name);
+            logger.info("Created collection: {}" , name);
         }
     }
 
@@ -238,7 +241,7 @@ public class MongoDBConnection {
             return response;
         } catch (Exception e) {
             response = "error: " + e.getMessage();
-            System.out.println(response);
+            logger.debug(response);
             e.printStackTrace();
             return response;
         }
@@ -268,24 +271,24 @@ public class MongoDBConnection {
 
                 String normalized = MongoDBConnection.normalizeJson(doc.toJson());
                 String hashed = SmartContractHash.generateMD5(normalized);
-                System.out.println("\nJSON Normalizzato:\n" + normalized + "\n" + "Hash Normalizzato:\n" + hashed);
+                logger.debug("JSON Normalizzato:\n {} \nHash Normalizzato:\n {}" , normalized, hashed);
 
                 int blockNumber = SCH.checkHash(hashed);
                 if(blockNumber > 0)
                 {
                     response = "Doc hash in block: " + blockNumber;
-                    System.out.println(response);
+                    logger.debug(response);
                     return response;
                 }
                 else
                 {
-                    response = "Error: no document hash in blockchain";
-                    System.out.println(response);
+                    response = "error: no document hash in blockchain";
+                    logger.debug(response);
                     return response;
                 }
             } catch (Exception e1) {
-                response = "Si è verificato un errore: " + e1;
-                System.out.println(response);
+                response = "error: " + e1;
+                logger.error(response);
                 e1.printStackTrace();
             }
         }
@@ -307,25 +310,25 @@ public class MongoDBConnection {
                 );
                 String normalized = MongoDBConnection.normalizeJson(_json);
                 String hashed = SmartContractHash.generateMD5(normalized);
-                System.out.println("\nJSON Normalizzato:\n" + normalized + "\n" + "Hash Normalizzato:\n" + hashed);
+                logger.debug("JSON Normalizzato:\n {} \nHash Normalizzato:\n {}" , normalized, hashed);
 
                 int blockNumber = SCH.checkHash(hashed);
 
                 if(blockNumber > 0)
                 {
                     response = "document hash in block: " + blockNumber;
-                    System.out.println(response);
+                    logger.debug(response);
                 }
                 else
                 {
                     response = "error: document hash not in blockchain";
-                    System.out.println(response);
+                    logger.debug(response);
                 }
 
             } catch (Exception e1)
             {
-                response = "Si è verificato un errore: " + e1;
-                System.out.println(response);
+                response = "error: " + e1;
+                logger.debug(response);
                 e1.printStackTrace();
             }
         }
@@ -386,7 +389,6 @@ public class MongoDBConnection {
     }
 
 
-    // TIPS: refactor this method.
     /* method that use getJsonFromID(_id) method:
         - if that method return something the ID exist
         - otherwise if error the ID does not exist */
@@ -509,13 +511,13 @@ public class MongoDBConnection {
     private static String normalizeAndStore(String _json) {
         try {
             String normalized = MongoDBConnection.normalizeJson(_json);
-            System.out.println("JSON Normalizzato:\n" + normalized);
-            System.out.println("Salvataggio in corso su database...");
+            logger.debug("JSON Normalizzato:\n{}" , normalized);
+            logger.debug("Salvataggio in corso su database...");
             String updatedNormalized = MongoDBConnection.storeEntry(normalized);
             if (updatedNormalized.contains("error")){ return updatedNormalized; }
             return MongoDBConnection.normalizeJson(updatedNormalized);
         } catch (Exception e) {
-            System.out.println("Errore salvataggio nel DB: " + e.getMessage());
+            logger.error("Errore salvataggio nel DB: {}" , e.getMessage());
             return null;
         }
     }
@@ -589,7 +591,7 @@ public class MongoDBConnection {
     private static String storeOnBlockchain(String _json, String entrID) {
         if (entrID.equals("")) return null;
         try {
-            System.out.println("Salvataggio in corso su blockchain...");
+            logger.debug("Salvataggio in corso su blockchain...");
             HashMap<String, String> settings = MongoDBConnection.getBCcredentials();
             SmartContractHash SCH = new SmartContractHash(
                     settings.get("address"),
@@ -601,7 +603,7 @@ public class MongoDBConnection {
 
             String hashed = SmartContractHash.generateMD5(_json);
             String receipt = SCH.storeHash(hashed);
-            System.out.println("Hashed md5: " + hashed + "Receipt SCH.storeHash(hashed): " + receipt);
+            logger.debug("Hashed md5: {}\n Receipt SCH.storeHash(hashed):{} " , hashed, receipt);
             String blockNumber = SmartContractHash.extractField(receipt, "blockNumber");
             if (blockNumber.contains("0x")) {
                 blockNumber = blockNumber.replaceFirst("^0x", "");
@@ -611,7 +613,7 @@ public class MongoDBConnection {
             return (Integer.parseInt(blockNumber) > 0) ? blockNumber : null;
 
         } catch (Exception e) {
-            System.out.println("Errore salvataggio in BC: " + e.getMessage());
+            logger.error("Errore salvataggio in BC: {}" , e.getMessage());
             return null;
         }
     }
@@ -666,7 +668,7 @@ public class MongoDBConnection {
 
 
     private static void updateDBwithBlockNum(String entryID, String blocknum) {
-        System.out.println("Aggiornamento database...");
+        logger.debug("Aggiornamento database...");
         MongoDBConnection.storeBlock(entryID, blocknum);
     }
 
@@ -778,7 +780,7 @@ public class MongoDBConnection {
                 counter++;
             }
         }
-        System.out.println("counter: " + counter);
+        logger.debug("counter: {}" , counter);
         return jsonArray.toString();
     }
 
