@@ -179,6 +179,12 @@ public class RoutesCore {
         String companyID = req.queryParams("companyID");     //companyID field in db
         String timeFromStr = req.queryParams("timeFrom");    //upload_time field in db
         String timeToStr = req.queryParams("timeTo");        //upload_time field in db
+        /*
+        NB. forse sarebbe meglio usare la data del dato caricato e non la data del caricamento del dato da parte del server
+            perche potrebbero non corrispondere (es. il disp manda il dato dopo 1gg/2gg ecc). Inoltre andrebbe cambiato sopra
+            in saveData() uploadData in serverUpload o simili per far capire che la data corrisponde al caricamento da parte
+            del server e non si tratta della data effettiva della creazione del dato.
+        */
         long timeFrom = 0;
         long timeTo = 0;
 
