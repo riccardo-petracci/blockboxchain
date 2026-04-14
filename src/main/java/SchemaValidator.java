@@ -48,5 +48,4 @@ public class SchemaValidator {
             return "Schema loading error: " + ex.getMessage();
         }
     }
-
 }

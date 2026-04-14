@@ -221,12 +221,9 @@ public class RoutesCore {
             return createResponse(res, STATUSCODE_BAD, ERR_STATUS, MSG_BAD, "limit must be between 1 and 500");
         }
         if(companyID == null || companyID.isEmpty()){
-            return createResponse(res, STATUSCODE_BAD, ERR_STATUS, MSG_BAD, "companyID null or empty");
+            return createResponse(res, STATUSCODE_BAD, ERR_STATUS, MSG_BAD, "companyID is missing");
         }
         boolean companyIDExists = MongoDBConnection.checkCompanyID(companyID);
-        if (companyID == null || companyID.isEmpty()) {
-            return createResponse(res, STATUSCODE_BAD, ERR_STATUS, MSG_BAD, "companyID missing");
-        }
         if (!companyIDExists) {
             return createResponse(res, STATUSCODE_BAD, ERR_STATUS, MSG_BAD, "companyID does not exists");
         }
